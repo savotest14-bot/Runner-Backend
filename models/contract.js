@@ -15,7 +15,12 @@ const contractSchema = new mongoose.Schema(
             type: String,
             required: true,
         },
-
+        invoiceNumber: {
+            type: String,
+        },
+        referenceNumber: {
+            type: String
+        },
         contractType: {
             type: String,
             enum: ["one-time", "long-term"],
@@ -79,7 +84,11 @@ const contractSchema = new mongoose.Schema(
             enum: ["draft", "active", "completed", "cancelled"],
             default: "draft",
         },
-
+        clinetStatus: {
+            type: String,
+            enum: ["pending", "accepted", "rejected"],
+            default: "pending",
+        },
         isDeleted: {
             type: Boolean,
             default: false,

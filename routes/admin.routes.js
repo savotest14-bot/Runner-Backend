@@ -8,10 +8,14 @@ const { uploadLicenseDocs, uploadProfileImage } = require("../middlewares/upload
 const {
   adminCreateCompany,
   getAllCompanies,
+  getActiveSubscriptionCompanies,
+  getPendingSubscriptionCompanies,
   getCompanyById,
   updateCompanyById,
   getAllEmployeesByCompany,
   getAllCompanyAdmins,
+  getPendingCompanyAdmins,
+  getApprovedCompanyAdmins,
   getSingleCompanyAdmin,
   updateCompanyAdmin,
   updateCompanyAdminProfilePic,
@@ -39,6 +43,21 @@ router.get(
 );
 
 router.get(
+  "/active-subscription-companies",
+  authenticate,
+  authorize("view_company"),
+  getActiveSubscriptionCompanies
+);
+
+router.get(
+  "/pending-subscription-companies",
+  authenticate,
+  authorize("view_company"),
+  getPendingSubscriptionCompanies
+);
+
+
+router.get(
   "/companies/:companyId",
   authenticate,
   authorize("view_company"),
@@ -64,6 +83,8 @@ router.get(
 /**Admin companyAdmin Routes */
 
 router.get("/getAllCompanyAdmins", authenticate, authorize("view_company_admins"), getAllCompanyAdmins);
+router.get("/getPendingCompanyAdmins", authenticate, authorize("view_company_admins"), getPendingCompanyAdmins);
+router.get("/getApprovedCompanyAdmins", authenticate, authorize("view_company_admins"), getApprovedCompanyAdmins);
 router.get("/getCompanyAdmin/:id", authenticate, authorize("view_company_admins"), getSingleCompanyAdmin);
 router.put("/updateCompanyAdmin/:id", authenticate, authorize("view_company_admins"), uploadLicenseDocs, updateCompanyAdmin);
 router.put(

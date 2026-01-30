@@ -4,6 +4,7 @@ const Role = require("../models/role");
 const template = require("../models/template");
 const Plan = require("../models/plan");
 const { PERMISSIONS } = require("../constants/permissions");
+const ContractTemplate = require("../models/contractTemplate");
 
 const connectDBAndSeed = async () => {
   try {
@@ -25,7 +26,7 @@ const connectDBAndSeed = async () => {
         {
           name: "superAdmin",
           scope: "platform",
-          permissions: Object.values(PERMISSIONS), 
+          permissions: Object.values(PERMISSIONS),
         },
         {
           name: "company_admin",
@@ -54,6 +55,7 @@ const connectDBAndSeed = async () => {
             PERMISSIONS.VIEW_PROPERTIES,
             PERMISSIONS.VIEW_TASKS,
             PERMISSIONS.VIEW_PLAN,
+            PERMISSIONS.PURCHASE_PLAN,
           ],
         },
         {
@@ -186,6 +188,99 @@ const connectDBAndSeed = async () => {
       ]);
     }
 
+    /*-------------------------------Contract Template-----------------------*/
+    const contractTemplates = await ContractTemplate.countDocuments();
+
+    if (!contractTemplates) {
+
+      await ContractTemplate.insertMany([
+        {
+          templateCode: "template-1",
+          templateName: "Light Blue",
+          htmlBody: `
+        <html>
+          <body style="font-family:Arial;background:#f4f8ff">
+            <h2 style="color:#3760FA">Contract Agreement</h2>
+            <p>Client Name: {{clientName}}</p>
+            <p>Contract No: {{contractNumber}}</p>
+          </body>
+        </html>
+      `
+        },
+        {
+          templateCode: "template-2",
+          templateName: "Light Pink",
+          htmlBody: `
+        <html>
+          <body style="font-family:Arial;background:#fff0f5">
+            <h2 style="color:#d63384">Contract Agreement</h2>
+            <p>Client Name: {{clientName}}</p>
+            <p>Contract No: {{contractNumber}}</p>
+          </body>
+        </html>
+      `
+        },
+        {
+          templateCode: "template-3",
+          templateName: "Purple",
+          htmlBody: `
+        <html>
+          <body style="background:#faf5ff">
+            <h2 style="color:#7c3aed">Contract Agreement</h2>
+          </body>
+        </html>
+      `
+        },
+        {
+          templateCode: "template-4",
+          templateName: "Dark",
+          htmlBody: `
+        <html>
+          <body style="background:#000;color:#fff">
+            <h2>Contract Agreement</h2>
+          </body>
+        </html>
+      `
+        },
+        {
+          templateCode: "template-5",
+          templateName: "Green",
+          htmlBody: `
+        <html>
+          <body style="background:#0f766e;color:#fff">
+            <h2>Contract Agreement</h2>
+          </body>
+        </html>
+      `
+        },
+        {
+          templateCode: "template-6",
+          templateName: "Teal",
+          htmlBody: `
+        <html>
+          <body style="background:#134e4a;color:#fff">
+            <h2>Contract Agreement</h2>
+          </body>
+        </html>
+      `
+        },
+        {
+          templateCode: "template-7",
+          templateName: "Minimal",
+          htmlBody: `
+        <html>
+          <body style="background:#fff;color:#111">
+            <h2>Contract Agreement</h2>
+          </body>
+        </html>
+      `
+        }
+      ]);
+
+      console.log("7 Contract templates seeded successfully");
+    }
+
+    
     /* ------------------------------- PLANS ------------------------------ */
 
     const plansCount = await Plan.countDocuments();

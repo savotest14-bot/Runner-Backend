@@ -92,6 +92,70 @@ exports.adminCreateCompany = async (req, res) => {
   }
 };
 
+// exports.getAllCompanies = async (req, res) => {
+//   try {
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = parseInt(req.query.limit) || 10;
+//     const search = req.query.search || "";
+//     const city = req.query.city || "";
+
+//     const skip = (page - 1) * limit;
+
+//     const filter = {
+//       isDeleted: false,
+//       ...(city && {
+//         "address.city": { $regex: city, $options: "i" },
+//       }),
+//       ...(search && {
+//         $or: [
+//           { companyName: { $regex: search, $options: "i" } },
+//           { contactEmail: { $regex: search, $options: "i" } },
+//           { phoneNumber: { $regex: search, $options: "i" } },
+//         ],
+//       }),
+//     };
+
+//     const [companies, total] = await Promise.all([
+//       Company.find(filter)
+//         .populate("planId", "planName monthlyFee annualFee")
+//         .populate("createdBy", "firstName lastName email")
+//         .sort({ createdAt: -1 })
+//         .skip(skip)
+//         .limit(limit)
+//         .lean(),
+
+//       Company.countDocuments(filter),
+//     ]);
+
+//     const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+//     const companiesWithFullUrls = companies.map((company) => ({
+//       ...company,
+//       licenseDocuments: company.licenseDocuments?.map((doc) => ({
+//         ...doc,
+//         fileUrl: `${baseUrl}${doc.fileUrl}`,
+//       })),
+//     }));
+
+//     return res.status(200).json({
+//       message: "Companies fetched successfully",
+//       data: companiesWithFullUrls,
+//       pagination: {
+//         total,
+//         page,
+//         limit,
+//         totalPages: Math.ceil(total / limit),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Get companies error:", error);
+//     return res.status(500).json({
+//       message: "Failed to fetch companies",
+//     });
+//   }
+// };
+
+
 exports.getAllCompanies = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -101,7 +165,7 @@ exports.getAllCompanies = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const filter = {
+    const matchStage = {
       isDeleted: false,
       ...(city && {
         "address.city": { $regex: city, $options: "i" },
@@ -115,31 +179,84 @@ exports.getAllCompanies = async (req, res) => {
       }),
     };
 
-    const [companies, total] = await Promise.all([
-      Company.find(filter)
-        .populate("planId", "planName monthlyFee annualFee")
-        .populate("createdBy", "firstName lastName email")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+    const pipeline = [
+      { $match: matchStage },
 
-      Company.countDocuments(filter),
+      {
+        $lookup: {
+          from: "users",
+          let: { companyId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$company", "$$companyId"] },
+                    { $eq: ["$isDeleted", false] },
+                  ],
+                },
+              },
+            },
+            {
+              $lookup: {
+                from: "roles",
+                localField: "role",
+                foreignField: "_id",
+                as: "role",
+              },
+            },
+            { $unwind: "$role" },
+            { $match: { "role.name": "company_admin" } },
+            {
+              $project: {
+                firstName: 1,
+                lastName: 1,
+                isApproved: 1,
+              },
+            },
+          ],
+          as: "admin",
+        },
+      },
+
+
+      {
+        $addFields: {
+          admin: { $first: "$admin" },
+        },
+      },
+
+      {
+        $project: {
+          companyName: 1,
+          contactEmail: 1,
+          phoneNumber: 1,
+          createdAt: 1,
+          address: { city: "$address.city" },
+
+          licenseExpiryDate: 1,
+          subscriptionStatus: 1,
+
+          admin: {
+            name: { $concat: ["$admin.firstName", " ", "$admin.lastName"] },
+            isApproved: "$admin.isApproved",
+          },
+        },
+      },
+
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const [companies, total] = await Promise.all([
+      Company.aggregate(pipeline),
+      Company.countDocuments(matchStage),
     ]);
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-
-    const companiesWithFullUrls = companies.map((company) => ({
-      ...company,
-      licenseDocuments: company.licenseDocuments?.map((doc) => ({
-        ...doc,
-        fileUrl: `${baseUrl}${doc.fileUrl}`,
-      })),
-    }));
-
     return res.status(200).json({
-      message: "Companies fetched successfully",
-      data: companiesWithFullUrls,
+      success: true,
+      data: companies,
       pagination: {
         total,
         page,
@@ -152,6 +269,234 @@ exports.getAllCompanies = async (req, res) => {
     return res.status(500).json({
       message: "Failed to fetch companies",
     });
+  }
+};
+
+exports.getPendingSubscriptionCompanies = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || "";
+    const city = req.query.city || "";
+
+    const skip = (page - 1) * limit;
+
+    const matchStage = {
+      isDeleted: false,
+      subscriptionStatus: "pending",
+      ...(city && {
+        "address.city": { $regex: city, $options: "i" },
+      }),
+      ...(search && {
+        $or: [
+          { companyName: { $regex: search, $options: "i" } },
+          { contactEmail: { $regex: search, $options: "i" } },
+          { phoneNumber: { $regex: search, $options: "i" } },
+        ],
+      }),
+    };
+
+    const pipeline = [
+      { $match: matchStage },
+
+      {
+        $lookup: {
+          from: "users",
+          let: { companyId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$company", "$$companyId"] },
+                    { $eq: ["$isDeleted", false] },
+                  ],
+                },
+              },
+            },
+            {
+              $lookup: {
+                from: "roles",
+                localField: "role",
+                foreignField: "_id",
+                as: "role",
+              },
+            },
+            { $unwind: "$role" },
+            { $match: { "role.name": "company_admin" } },
+            {
+              $project: {
+                firstName: 1,
+                lastName: 1,
+                isApproved: 1,
+              },
+            },
+          ],
+          as: "admin",
+        },
+      },
+
+      { $addFields: { admin: { $first: "$admin" } } },
+
+      {
+        $project: {
+          companyName: 1,
+          contactEmail: 1,
+          phoneNumber: 1,
+          createdAt: 1,
+          address: { city: "$address.city" },
+          licenseExpiryDate: 1,
+          subscriptionStatus: 1,
+          admin: {
+            name: {
+              $cond: [
+                { $ifNull: ["$admin", false] },
+                { $concat: ["$admin.firstName", " ", "$admin.lastName"] },
+                null,
+              ],
+            },
+            isApproved: "$admin.isApproved",
+          },
+        },
+      },
+
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const [companies, total] = await Promise.all([
+      Company.aggregate(pipeline),
+      Company.countDocuments(matchStage),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: companies,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Pending subscription companies error:", error);
+    return res.status(500).json({ message: "Failed to fetch pending companies" });
+  }
+};
+
+exports.getActiveSubscriptionCompanies = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || "";
+    const city = req.query.city || "";
+
+    const skip = (page - 1) * limit;
+
+    const matchStage = {
+      isDeleted: false,
+      subscriptionStatus: "active",
+      ...(city && {
+        "address.city": { $regex: city, $options: "i" },
+      }),
+      ...(search && {
+        $or: [
+          { companyName: { $regex: search, $options: "i" } },
+          { contactEmail: { $regex: search, $options: "i" } },
+          { phoneNumber: { $regex: search, $options: "i" } },
+        ],
+      }),
+    };
+
+    const pipeline = [
+      { $match: matchStage },
+
+      {
+        $lookup: {
+          from: "users",
+          let: { companyId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$company", "$$companyId"] },
+                    { $eq: ["$isDeleted", false] },
+                  ],
+                },
+              },
+            },
+            {
+              $lookup: {
+                from: "roles",
+                localField: "role",
+                foreignField: "_id",
+                as: "role",
+              },
+            },
+            { $unwind: "$role" },
+            { $match: { "role.name": "company_admin" } },
+            {
+              $project: {
+                firstName: 1,
+                lastName: 1,
+                isApproved: 1,
+              },
+            },
+          ],
+          as: "admin",
+        },
+      },
+
+      { $addFields: { admin: { $first: "$admin" } } },
+
+      {
+        $project: {
+          companyName: 1,
+          contactEmail: 1,
+          phoneNumber: 1,
+          createdAt: 1,
+          address: { city: "$address.city" },
+          licenseExpiryDate: 1,
+          subscriptionStatus: 1,
+          admin: {
+            name: {
+              $cond: [
+                { $ifNull: ["$admin", false] },
+                { $concat: ["$admin.firstName", " ", "$admin.lastName"] },
+                null,
+              ],
+            },
+            isApproved: "$admin.isApproved",
+          },
+        },
+      },
+
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    const [companies, total] = await Promise.all([
+      Company.aggregate(pipeline),
+      Company.countDocuments(matchStage),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: companies,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Active subscription companies error:", error);
+    return res.status(500).json({ message: "Failed to fetch active companies" });
   }
 };
 
@@ -240,6 +585,8 @@ exports.updateCompanyById = async (req, res) => {
       state,
       country,
       pincode,
+      licenseNo,
+      licenseExpiryDate,
     } = req.body;
 
     const updateData = {};
@@ -278,6 +625,12 @@ exports.updateCompanyById = async (req, res) => {
     }
 
     if (companyName) updateData.companyName = companyName;
+
+    /* ---------------- LICENSES ---------------- */
+    if (licenseNo || licenseExpiryDate) {
+      updateData.licenseNo = licenseNo;
+      updateData.licenseExpiryDate = licenseExpiryDate;
+    }
 
     /* ---------------- ADDRESS ---------------- */
     if (
@@ -579,6 +932,202 @@ exports.getAllCompanyAdmins = async (req, res) => {
     });
   }
 };
+
+
+exports.getPendingCompanyAdmins = async (req, res) => {
+  try {
+    if (req.user.role.name !== "superAdmin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const { search = "", city = "", page = 1, limit = 10 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const pipeline = [
+      {
+        $lookup: {
+          from: "roles",
+          localField: "role",
+          foreignField: "_id",
+          as: "role",
+        },
+      },
+      { $unwind: "$role" },
+
+      {
+        $match: {
+          isDeleted: false,
+          "role.name": "company_admin",
+          isApproved: "pending",
+        },
+      },
+
+      {
+        $lookup: {
+          from: "companies",
+          localField: "company",
+          foreignField: "_id",
+          as: "company",
+        },
+      },
+      {
+        $unwind: {
+          path: "$company",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $match: {
+          ...(search && {
+            "company.companyName": { $regex: search, $options: "i" },
+          }),
+          ...(city && {
+            "address.city": { $regex: city, $options: "i" },
+          }),
+        },
+      },
+
+      {
+        $facet: {
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: Number(skip) },
+            { $limit: Number(limit) },
+            {
+              $project: {
+                firstName: 1,
+                lastName: 1,
+                email: 1,
+                profilePic: 1,
+                isApproved: 1,
+                createdAt: 1,
+                "company.companyName": 1,
+                "address.city": 1,
+              },
+            },
+          ],
+          total: [{ $count: "count" }],
+        },
+      },
+    ];
+
+    const result = await User.aggregate(pipeline);
+    const data = result[0]?.data || [];
+    const total = result[0]?.total[0]?.count || 0;
+
+    return res.status(200).json({
+      success: true,
+      data,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+      },
+    });
+  } catch (error) {
+    console.error("Pending company admins error:", error);
+    return res.status(500).json({ message: "Failed to fetch pending company admins" });
+  }
+};
+
+exports.getApprovedCompanyAdmins = async (req, res) => {
+  try {
+    if (req.user.role.name !== "superAdmin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const { search = "", city = "", page = 1, limit = 10 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const pipeline = [
+      {
+        $lookup: {
+          from: "roles",
+          localField: "role",
+          foreignField: "_id",
+          as: "role",
+        },
+      },
+      { $unwind: "$role" },
+
+      {
+        $match: {
+          isDeleted: false,
+          "role.name": "company_admin",
+          isApproved: "approved",
+        },
+      },
+
+      {
+        $lookup: {
+          from: "companies",
+          localField: "company",
+          foreignField: "_id",
+          as: "company",
+        },
+      },
+      {
+        $unwind: {
+          path: "$company",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $match: {
+          ...(search && {
+            "company.companyName": { $regex: search, $options: "i" },
+          }),
+          ...(city && {
+            "address.city": { $regex: city, $options: "i" },
+          }),
+        },
+      },
+
+      {
+        $facet: {
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: Number(skip) },
+            { $limit: Number(limit) },
+            {
+              $project: {
+                firstName: 1,
+                lastName: 1,
+                email: 1,
+                profilePic: 1,
+                isApproved: 1,
+                createdAt: 1,
+                "company.companyName": 1,
+                "address.city": 1,
+              },
+            },
+          ],
+          total: [{ $count: "count" }],
+        },
+      },
+    ];
+
+    const result = await User.aggregate(pipeline);
+    const data = result[0]?.data || [];
+    const total = result[0]?.total[0]?.count || 0;
+
+    return res.status(200).json({
+      success: true,
+      data,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+      },
+    });
+  } catch (error) {
+    console.error("Approved company admins error:", error);
+    return res.status(500).json({ message: "Failed to fetch approved company admins" });
+  }
+};
+
 
 
 

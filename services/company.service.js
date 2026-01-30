@@ -20,8 +20,7 @@ exports.createCompanyAndAdmin = async ({
     const existingEmail = await User.findOne({
       isDeleted: false,
       $or: [
-        { email: adminData.email.toLowerCase() },
-        { phone: adminData.phoneNumber }
+        { email: adminData.email.toLowerCase() }
       ]
     });
 
@@ -29,16 +28,16 @@ exports.createCompanyAndAdmin = async ({
       throw new Error("Email already registered");
     }
 
-    const existingPhone = await User.findOne({
-      isDeleted: false,
-      $or: [
-        { phone: adminData.phoneNumber }
-      ]
-    });
+    // const existingPhone = await User.findOne({
+    //   isDeleted: false,
+    //   $or: [
+    //     { phone: adminData.phoneNumber } 
+    //   ]
+    // });
 
-    if (existingPhone) {
-      throw new Error("Phone number already registered");
-    }
+    // if (existingPhone) {
+    //   throw new Error("Phone number already registered");
+    // }
 
     const [company] = await Company.create(
       [

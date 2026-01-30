@@ -159,8 +159,12 @@ exports.softDeletePlan = async (req, res) => {
 
 exports.getAllPlans = async (req, res) => {
   try {
-    if (req.user.role.name !== "superAdmin") {
-      return res.status(403).json({ message: "Access denied" });
+    const role = req.user?.role?.name;
+
+    if (!["superAdmin", "company_admin"].includes(role)) {
+      return res
+        .status(403)
+        .json({ message: "You dont have permission to access this route" });
     }
 
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
@@ -172,6 +176,10 @@ exports.getAllPlans = async (req, res) => {
     const filter = {
       isDeleted: false,
     };
+
+    if (role === "company_admin") {
+      filter.planStatus = "active";
+    }
 
     if (search) {
       filter.planName = { $regex: search, $options: "i" };
@@ -286,12 +294,12 @@ exports.purchasePlan = async (req, res) => {
       createdBy: user._id,
     });
 
-    company.planId = plan._id; 
+    company.planId = plan._id;
     company.subscriptionId = subscription._id;
     company.subscriptionAmount = amount;
     company.subscriptionStartDate = startDate;
     company.subscriptionEndDate = endDate;
-    company.subscriptionStatus = "active"; 
+    company.subscriptionStatus = "active";
     company.paymentFrequency = billingCycle;
 
     await company.save();
