@@ -19,7 +19,8 @@ const {
   getSingleCompanyAdmin,
   updateCompanyAdmin,
   updateCompanyAdminProfilePic,
-  toggleCompanyAndAllUsers
+  toggleCompanyAndAllUsers,
+  getAllUsersForSuperAdmin
 } = require("../controllers/admin.controller");
 
 const { createContract, getAllContracts, getSingleContractBySuperAdmin } = require("../controllers/contract");
@@ -108,5 +109,8 @@ router.patch(
 router.post("/createContract", authenticate, authorize("create_contract"), uploadContractFiles,  createContract);
 router.get("/getAllContracts", authenticate, authorize("view_contracts"), getAllContracts);
 router.get("/getContractById/:id", authenticate, authorize("view_contracts"), getSingleContractBySuperAdmin);
+
+
+router.get("/getAllUsers", authenticate, authorize("view_user"), getAllUsersForSuperAdmin);
 
 module.exports = router;

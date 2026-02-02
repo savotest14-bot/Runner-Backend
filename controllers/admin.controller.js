@@ -182,6 +182,7 @@ exports.getAllCompanies = async (req, res) => {
     const pipeline = [
       { $match: matchStage },
 
+      /* 🔗 company_admin lookup */
       {
         $lookup: {
           from: "users",
@@ -219,15 +220,13 @@ exports.getAllCompanies = async (req, res) => {
         },
       },
 
-
-      {
-        $addFields: {
-          admin: { $first: "$admin" },
-        },
-      },
+      { $addFields: { admin: { $first: "$admin" } } },
 
       {
         $project: {
+          _id: 0,
+          companyId: "$_id",
+
           companyName: 1,
           contactEmail: 1,
           phoneNumber: 1,
@@ -238,7 +237,13 @@ exports.getAllCompanies = async (req, res) => {
           subscriptionStatus: 1,
 
           admin: {
-            name: { $concat: ["$admin.firstName", " ", "$admin.lastName"] },
+            name: {
+              $cond: [
+                { $ifNull: ["$admin", false] },
+                { $concat: ["$admin.firstName", " ", "$admin.lastName"] },
+                null,
+              ],
+            },
             isApproved: "$admin.isApproved",
           },
         },
@@ -271,6 +276,7 @@ exports.getAllCompanies = async (req, res) => {
     });
   }
 };
+
 
 exports.getPendingSubscriptionCompanies = async (req, res) => {
   try {
@@ -339,14 +345,20 @@ exports.getPendingSubscriptionCompanies = async (req, res) => {
       { $addFields: { admin: { $first: "$admin" } } },
 
       {
+
         $project: {
+          _id: 0,
+          companyId: "$_id",
+
           companyName: 1,
           contactEmail: 1,
           phoneNumber: 1,
           createdAt: 1,
           address: { city: "$address.city" },
+
           licenseExpiryDate: 1,
           subscriptionStatus: 1,
+
           admin: {
             name: {
               $cond: [
@@ -358,6 +370,7 @@ exports.getPendingSubscriptionCompanies = async (req, res) => {
             isApproved: "$admin.isApproved",
           },
         },
+
       },
 
       { $sort: { createdAt: -1 } },
@@ -454,13 +467,18 @@ exports.getActiveSubscriptionCompanies = async (req, res) => {
 
       {
         $project: {
+          _id: 0,                 
+          companyId: "$_id",    
+
           companyName: 1,
           contactEmail: 1,
           phoneNumber: 1,
           createdAt: 1,
           address: { city: "$address.city" },
+
           licenseExpiryDate: 1,
           subscriptionStatus: 1,
+
           admin: {
             name: {
               $cond: [
@@ -1352,7 +1370,7 @@ exports.updateCompanyAdminProfilePic = async (req, res) => {
       });
     }
 
-     if (companyAdmin.profilePic) {
+    if (companyAdmin.profilePic) {
       deleteFileIfExists(companyAdmin.profilePic);
     }
 
@@ -1437,3 +1455,127 @@ exports.toggleCompanyAndAllUsers = async (req, res) => {
     });
   }
 };
+
+
+exports.getAllUsersForSuperAdmin = async (req, res) => {
+  try {
+    // 🔐 Authorization
+    if (req.user.role.name !== "superAdmin") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const { role, isApproved, search = "" } = req.query;
+
+    const pipeline = [
+      /* ❌ Exclude deleted users */
+      {
+        $match: { isDeleted: false },
+      },
+
+      /* 🔗 Join roles */
+      {
+        $lookup: {
+          from: "roles",
+          localField: "role",
+          foreignField: "_id",
+          as: "role",
+        },
+      },
+      { $unwind: "$role" },
+
+      /* 🔎 Filters */
+      {
+        $match: {
+          ...(role && { "role.name": role }),
+          ...(isApproved && { isApproved }),
+          ...(search && {
+            $or: [
+              { firstName: { $regex: search, $options: "i" } },
+              { lastName: { $regex: search, $options: "i" } },
+              { email: { $regex: search, $options: "i" } },
+              { phone: { $regex: search, $options: "i" } },
+            ],
+          }),
+        },
+      },
+
+      /* 🔗 Join company */
+      {
+        $lookup: {
+          from: "companies",
+          localField: "company",
+          foreignField: "_id",
+          as: "company",
+        },
+      },
+      {
+        $unwind: {
+          path: "$company",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      /* 📊 Pagination + Count */
+      {
+        $facet: {
+          data: [
+            { $sort: { createdAt: -1 } },
+            { $skip: skip },
+            { $limit: limit },
+
+            {
+              $project: {
+                _id: 0,
+                userId: "$_id",
+
+                firstName: 1,
+                lastName: 1,
+                email: 1,
+                phone: 1,
+                profilePic: 1,
+                gender: 1,
+                isApproved: 1,
+                createdAt: 1,
+
+                role: "$role.name",
+
+                company: {
+                  companyId: "$company._id",
+                  companyName: "$company.companyName",
+                },
+              },
+            },
+          ],
+
+          totalCount: [{ $count: "total" }],
+        },
+      },
+    ];
+
+    const result = await User.aggregate(pipeline);
+
+    const users = result[0]?.data || [];
+    const total = result[0]?.totalCount[0]?.total || 0;
+
+    return res.status(200).json({
+      success: true,
+      data: users,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Get all users error:", error);
+    return res.status(500).json({
+      message: "Failed to fetch users",
+    });
+  }
+};
+
