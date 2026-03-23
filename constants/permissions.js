@@ -22,6 +22,7 @@ module.exports.PERMISSIONS = {
   VIEW_PLAN: "view_plan",
   DELETE_PLAN: "delete_plan",
   PURCHASE_PLAN: "purchase_plan",
+  VIEW_TEMPLATES: "view_templates",
 
   // Users
   CREATE_USER: "create_user",

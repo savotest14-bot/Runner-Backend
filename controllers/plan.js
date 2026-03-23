@@ -8,6 +8,7 @@ exports.createPlan = async (req, res) => {
     if (req.user.role.name !== "superAdmin") {
       return res.status(403).json({ message: "Access denied" });
     }
+
     const {
       planName,
       monthlyFees,
@@ -15,31 +16,54 @@ exports.createPlan = async (req, res) => {
       sequence,
       planDescription,
       planFeatures = [],
+      employeeLimit,
     } = req.body;
 
-    if (!planName || monthlyFees == null || annualFees == null || sequence == null) {
+    if (
+      !planName ||
+      monthlyFees == null ||
+      annualFees == null ||
+      sequence == null ||
+      employeeLimit == null
+    ) {
       return res.status(400).json({
-        message: "planName, monthlyFees, sequence and annualFees are required",
+        message:
+          "planName, monthlyFees, annualFees, sequence and employeeLimit are required",
       });
     }
 
-    const exists = await Plan.findOne({
+    // 🔎 Check if plan exists
+    let plan = await Plan.findOne({
       planName: planName.trim(),
-      planStatus: "active",
       isDeleted: false,
     });
 
-    if (exists) {
-      return res.status(409).json({
-        message: "Plan already exists with this name",
+    // ✅ IF EXISTS → UPDATE
+    if (plan) {
+      plan.monthlyFees = monthlyFees;
+      plan.annualFees = annualFees;
+      plan.sequence = sequence;
+      plan.employeeLimit = employeeLimit;
+      plan.planDescription = planDescription;
+      plan.planFeatures = planFeatures;
+      plan.updatedBy = req.user._id;
+
+      await plan.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Plan updated successfully",
+        data: plan,
       });
     }
 
-    const plan = await Plan.create({
+    // ✅ IF NOT EXISTS → CREATE
+    plan = await Plan.create({
       planName: planName.trim(),
       monthlyFees,
       annualFees,
       sequence,
+      employeeLimit,
       planDescription,
       planFeatures,
       createdBy: req.user._id,
@@ -51,17 +75,21 @@ exports.createPlan = async (req, res) => {
       data: plan,
     });
   } catch (error) {
-    console.error("Create plan error:", error);
+    console.error("Create/Update plan error:", error);
+
     if (error.code === 11000) {
       return res.status(409).json({
-        message: "Plan already exists with this Sequence",
+        message: "Sequence already exists",
       });
     }
+
     return res.status(500).json({
-      message: "Failed to create plan",
+      message: "Failed to process plan",
     });
   }
 };
+
+
 
 exports.togglePlanStatus = async (req, res) => {
   try {
@@ -160,7 +188,7 @@ exports.softDeletePlan = async (req, res) => {
 exports.getAllPlans = async (req, res) => {
   try {
     const role = req.user?.role?.name;
-
+    
     if (!["superAdmin", "company_admin"].includes(role)) {
       return res
         .status(403)

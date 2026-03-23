@@ -8,6 +8,6 @@ const { createPlan, togglePlanStatus, softDeletePlan, getAllPlans, purchasePlan 
 router.post("/create", authenticate, authorize("create_plan"), createPlan);
 router.patch("/toggle-status/:id", authenticate, authorize("update_plan"), togglePlanStatus);
 router.delete("/delete/:id", authenticate, authorize("delete_plan"), softDeletePlan);
-router.get("/getAllPlans", authenticate, authorize("view_plans"), getAllPlans);
+router.get("/getAllPlans", authenticate, authorize("view_plan"), getAllPlans);
 router.post("/purchase-plan", authenticate, authorize("purchase_plan"), purchasePlan);
 module.exports = router;

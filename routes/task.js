@@ -5,8 +5,6 @@ const authorize = require("../middlewares/authorize");
 const { getAllTasksForCompanyAdmin, getTaskByIdForCompanyAdmin } = require("../controllers/task");
 
 
-// Task
-
 router.get(
   "/getAllTasks",
   authenticate,

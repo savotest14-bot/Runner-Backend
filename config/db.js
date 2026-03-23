@@ -54,8 +54,10 @@ const connectDBAndSeed = async () => {
 
             PERMISSIONS.VIEW_PROPERTIES,
             PERMISSIONS.VIEW_TASKS,
+            PERMISSIONS.VIEW_TEMPLATES,
             PERMISSIONS.VIEW_PLAN,
             PERMISSIONS.PURCHASE_PLAN,
+            PERMISSIONS.MANAGE_EMPLOYEES,
           ],
         },
         {
@@ -81,6 +83,14 @@ const connectDBAndSeed = async () => {
         {
           name: "employee",
           scope: "self",
+          permissions: [
+            PERMISSIONS.VIEW_SELF,
+            PERMISSIONS.UPDATE_SELF,
+          ],
+        },
+        {
+          name: "runner_employee",
+          scope: "platform",
           permissions: [
             PERMISSIONS.VIEW_SELF,
             PERMISSIONS.UPDATE_SELF,
@@ -193,94 +203,166 @@ const connectDBAndSeed = async () => {
 
     if (!contractTemplates) {
 
-      await ContractTemplate.insertMany([
-        {
-          templateCode: "template-1",
-          templateName: "Light Blue",
-          htmlBody: `
-        <html>
-          <body style="font-family:Arial;background:#f4f8ff">
-            <h2 style="color:#3760FA">Contract Agreement</h2>
-            <p>Client Name: {{clientName}}</p>
-            <p>Contract No: {{contractNumber}}</p>
-          </body>
-        </html>
-      `
-        },
-        {
-          templateCode: "template-2",
-          templateName: "Light Pink",
-          htmlBody: `
-        <html>
-          <body style="font-family:Arial;background:#fff0f5">
-            <h2 style="color:#d63384">Contract Agreement</h2>
-            <p>Client Name: {{clientName}}</p>
-            <p>Contract No: {{contractNumber}}</p>
-          </body>
-        </html>
-      `
-        },
-        {
-          templateCode: "template-3",
-          templateName: "Purple",
-          htmlBody: `
-        <html>
-          <body style="background:#faf5ff">
-            <h2 style="color:#7c3aed">Contract Agreement</h2>
-          </body>
-        </html>
-      `
-        },
-        {
-          templateCode: "template-4",
-          templateName: "Dark",
-          htmlBody: `
-        <html>
-          <body style="background:#000;color:#fff">
-            <h2>Contract Agreement</h2>
-          </body>
-        </html>
-      `
-        },
-        {
-          templateCode: "template-5",
-          templateName: "Green",
-          htmlBody: `
-        <html>
-          <body style="background:#0f766e;color:#fff">
-            <h2>Contract Agreement</h2>
-          </body>
-        </html>
-      `
-        },
-        {
-          templateCode: "template-6",
-          templateName: "Teal",
-          htmlBody: `
-        <html>
-          <body style="background:#134e4a;color:#fff">
-            <h2>Contract Agreement</h2>
-          </body>
-        </html>
-      `
-        },
-        {
-          templateCode: "template-7",
-          templateName: "Minimal",
-          htmlBody: `
-        <html>
-          <body style="background:#fff;color:#111">
-            <h2>Contract Agreement</h2>
-          </body>
-        </html>
-      `
-        }
-      ]);
+     async function storeInvoiceTemplate() {
+  const html = `<div style="font-family: Arial; background:#f3f4f6; padding:30px;">
+  <div style="max-width:800px; margin:auto; background:white; border-radius:12px; padding:25px;">
 
-      console.log("7 Contract templates seeded successfully");
+   <div style="{{BACKGROUND_HEADER}}; padding:20px; border-radius:10px; {{HEADER_TEXT}}">
+  <table width="100%">
+    <tr>
+      <td>
+        <table>
+          <tr>
+            <td style="vertical-align:middle;">
+              <img 
+                src="{{COMPANY_LOGO}}" 
+                alt="Company Logo"
+                style="height:45px; max-width:150px; object-fit:contain; margin-right:10px;"
+              />
+            </td>
+            <td style="vertical-align:middle;">
+              <h2 style="margin:0;">{{COMPANY_NAME}}</h2>
+              <small>{{COMPANY_TAGLINE}}</small>
+            </td>
+          </tr>
+        </table>
+      </td>
+
+      <td align="right">
+        <b>{{COMPANY_ADDRESS}}</b><br/>
+        {{COMPANY_PHONE}}
+      </td>
+    </tr>
+  </table>
+</div>
+
+    <table width="100%" style="margin-top:25px;">
+      <tr>
+        <td width="50%">
+          <b>Client Detail</b><br/>
+          {{CLIENT_NAME}}<br/>
+          {{CLIENT_ADDRESS}}
+        </td>
+        <td width="50%" align="right">
+          <b>Invoice:</b> {{INVOICE_NO}}<br/>
+          <b>Reference:</b> {{REFERENCE_NO}}
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" style="margin-top:25px; border-collapse: collapse;">
+      <tr style="{{TABLE_HEADER_BG}}">
+        <th style="padding:10px;">#</th>
+        <th>Task</th>
+        <th>Time</th>
+        <th>Rate</th>
+        <th>Amount</th>
+      </tr>
+
+      {{TASK_ROWS}}
+
+    </table>
+
+    <div style="margin-top:20px;" align="right">
+      <h3 style="{{TOTAL_COLOR}}">Total: {{TOTAL}}</h3>
+    </div>
+
+    <!-- ✅ ACCEPT / REJECT BUTTONS -->
+    <div style="margin-top:35px; text-align:center;">
+
+      <p style="margin-bottom:15px; font-size:14px;">
+        Please confirm this contract.
+      </p>
+
+      <a href="{{ACCEPT_URL}}" 
+         style="background:#22c55e;
+                color:white;
+                padding:14px 28px;
+                text-decoration:none;
+                border-radius:8px;
+                font-weight:bold;
+                display:inline-block;
+                margin-right:10px;">
+        ✅ Accept Contract
+      </a>
+
+      <a href="{{REJECT_URL}}" 
+         style="background:#ef4444;
+                color:white;
+                padding:14px 28px;
+                text-decoration:none;
+                border-radius:8px;
+                font-weight:bold;
+                display:inline-block;">
+        ❌ Reject Contract
+      </a>
+
+    </div>
+
+  </div>
+</div>
+`;
+
+  const themes = {
+    blue: {
+      BACKGROUND_HEADER: "background:#e0ecff",
+      HEADER_TEXT: "color:#1e40af",
+      TABLE_HEADER_BG: "background:#dbeafe",
+      TOTAL_COLOR: "color:#1e40af",
+    },
+    green: {
+      BACKGROUND_HEADER: "background:#dcfce7",
+      HEADER_TEXT: "color:#166534",
+      TABLE_HEADER_BG: "background:#bbf7d0",
+      TOTAL_COLOR: "color:#166534",
+    },
+    purple: {
+      BACKGROUND_HEADER: "background:#ede9fe",
+      HEADER_TEXT: "color:#6d28d9",
+      TABLE_HEADER_BG: "background:#ddd6fe",
+      TOTAL_COLOR: "color:#6d28d9",
+    },
+    red: {
+      BACKGROUND_HEADER: "background:#fee2e2",
+      HEADER_TEXT: "color:#b91c1c",
+      TABLE_HEADER_BG: "background:#fecaca",
+      TOTAL_COLOR: "color:#b91c1c",
+    },
+    orange: {
+      BACKGROUND_HEADER: "background:#ffedd5",
+      HEADER_TEXT: "color:#c2410c",
+      TABLE_HEADER_BG: "background:#fed7aa",
+      TOTAL_COLOR: "color:#c2410c",
+    },
+    teal: {
+      BACKGROUND_HEADER: "background:#ccfbf1",
+      HEADER_TEXT: "color:#115e59",
+      TABLE_HEADER_BG: "background:#99f6e4",
+      TOTAL_COLOR: "color:#115e59",
+    },
+    dark: {
+      BACKGROUND_HEADER: "background:#111827",
+      HEADER_TEXT: "color:#ffffff",
+      TABLE_HEADER_BG: "background:#1f2937; color:white",
+      TOTAL_COLOR: "color:#111827",
+    }
+  };
+
+  await ContractTemplate.create({
+    name: "Invoice Template",
+    templateCode: "invoice_v1",
+    subject: "Invoice from {{COMPANY}}",
+    html,
+    themes, 
+    isActive: true,
+  });
+
+  console.log("✅ Invoice template stored successfully");
+}
+storeInvoiceTemplate();
     }
 
-    
+
     /* ------------------------------- PLANS ------------------------------ */
 
     const plansCount = await Plan.countDocuments();
@@ -295,6 +377,7 @@ const connectDBAndSeed = async () => {
           monthlyFees: 99,
           annualFees: 999,
           planStatus: "active",
+          employeeLimit: 2,
           sequence: 1,
           planFeatures: [
             "5 users",
@@ -308,6 +391,7 @@ const connectDBAndSeed = async () => {
           monthlyFees: 199,
           annualFees: 1999,
           planStatus: "active",
+          employeeLimit: 25,
           sequence: 2,
           planFeatures: [
             "5 users",
@@ -321,6 +405,7 @@ const connectDBAndSeed = async () => {
           monthlyFees: 299,
           annualFees: 2999,
           planStatus: "active",
+          employeeLimit: 50,
           sequence: 3,
           planFeatures: [
             "5 users",

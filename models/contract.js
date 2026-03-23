@@ -89,6 +89,15 @@ const contractSchema = new mongoose.Schema(
             enum: ["pending", "accepted", "rejected"],
             default: "pending",
         },
+        emailTemplateCode: String,
+        emailTheme: String,
+        emailStatus: {
+            type: String,
+            enum: ["pending", "sent", "accepted", "rejected"],
+            default: "pending"
+        },
+        rejectionReason: String,
+        emailRespondedAt: Date,
         isDeleted: {
             type: Boolean,
             default: false,

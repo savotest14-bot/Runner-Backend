@@ -453,6 +453,8 @@ exports.companyAdminSignup = async (req, res) => {
       password,
       licenseNo,
       licenseExpiryDate,
+      firstName,
+      lastName,
       addressLine1,
       addressLine2,
       city,
@@ -486,6 +488,8 @@ exports.companyAdminSignup = async (req, res) => {
           email: contactEmail,
           phone: phoneNumber,
           password,
+          firstName,
+          lastName,
         },
         createdByUserId: null,
       });

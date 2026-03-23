@@ -11,6 +11,8 @@ const contractRoutes = require("./routes/contract");
 const companyAdminRoutes = require("./routes/companyAdmin");
 const taskRoutes = require("./routes/task");
 const planRoutes = require("./routes/plan");
+const company = require("./models/company");
+const User = require("./models/user");
 
 const app = express();
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -24,7 +26,6 @@ app.use(
     credentials: true,
   })
 );
-
 
 
 app.get("/", (req, res) => {

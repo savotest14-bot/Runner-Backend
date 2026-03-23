@@ -3,7 +3,8 @@ const router = express.Router();
 const authenticate = require("../middlewares/authenticate");
 const authorize = require("../middlewares/authorize");
 const { uploadContractFiles } = require("../middlewares/employeeUploads"); 
-const { getAllClientsForCompanyAdmin, getAllPropertiesForCompanyAdmin } = require("../controllers/companyAdmin");
+const { getAllClientsForCompanyAdmin, getAllPropertiesForCompanyAdmin, getTemplatesForAdmin, updateCompanyLogo } = require("../controllers/companyAdmin");
+const { uploadCompanyLogo } = require("../middlewares/uploads");
 
 
 // Clients
@@ -19,5 +20,18 @@ router.get(
   getAllPropertiesForCompanyAdmin
 );
 
+router.get(
+  "/getTemplates",
+  authenticate,
+  authorize("view_templates"),
+  getTemplatesForAdmin
+);
+
+router.put(
+  "/uploadCompanyLogo/:id",
+  authenticate,
+  uploadCompanyLogo,
+  updateCompanyLogo
+);
 
 module.exports = router;

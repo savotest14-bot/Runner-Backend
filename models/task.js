@@ -10,37 +10,45 @@ const taskSchema = new mongoose.Schema(
         taskCategory: String,
         taskSubCategory: String,
 
-        taskTime: {
-            type: Number, 
+        taskDuration: {
+            type: Number,
+            required: true,
+            min: 1
         },
 
+        taskDurationUnit: {
+            type: String,
+            enum: ["years", "months", "days", "hours", "minutes", "seconds"],
+            required: true
+        },
         taskPrice: {
             type: Number,
+            default: 0
         },
+        timerStartedAt: Date,
+        timerCompletedAt: Date,
+        taskEndAt: Date,
 
-        description: String,
-
-        dueDate: Date,
+        status: {
+            type: String,
+            enum: ["pending", "in_progress", "completed"],
+            default: "pending",
+        },
 
         company: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Company",
             required: true,
         },
-        assignedTo: [
-            {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "User",
-            },
-        ],
+
+        assignedTo: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        }],
+
         assignedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-        },
-        status: {
-            type: String,
-            enum: ["pending", "in_progress", "completed"],
-            default: "pending",
         },
 
         isDeleted: {
@@ -50,5 +58,6 @@ const taskSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
 
 module.exports = mongoose.model("Task", taskSchema);

@@ -36,6 +36,12 @@ const planSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    employeeLimit: {
+      type: Number,
+      required: true,
+      min: 1,
+      default: 1
+    },
     planFeatures: [
       {
         type: String,

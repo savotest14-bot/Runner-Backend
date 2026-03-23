@@ -1,5 +1,6 @@
 
 const User = require("../models/user");
+const Plan = require("../models/plan");
 const Role = require("../models/role");
 const mongoose = require("mongoose");
 const fs = require("fs");
@@ -9,6 +10,8 @@ const { sendSimpleMail } = require("../functions/sendSimpleMail");
 const { employeeWelcomeTemplate } = require("../emails/employeeWelcomeTemplate");
 const { passwordUpdatedTemplate } = require("../emails/passwordUpdatedTemplate");
 const Company = require("../models/company");
+
+
 
 
 exports.createEmployee = async (req, res) => {
@@ -22,6 +25,26 @@ exports.createEmployee = async (req, res) => {
             _id: req.user.company,
             isDeleted: false
         })
+        if (!company) {
+            return res.status(404).json({
+                message: "Company not found",
+            });
+        }
+
+        const plan = await Plan.findById(company.planId);
+
+        if (!plan) {
+            return res.status(400).json({
+                message: "Company plan not found",
+            });
+        }
+
+        // ✅ Check employee limit using company counter
+        if (company.currentEmployeeCount >= plan.employeeLimit) {
+            return res.status(400).json({
+                message: `Employee limit reached. Max allowed: ${plan.employeeLimit}`,
+            });
+        }
 
         const companyName = company.companyName
 
@@ -37,7 +60,7 @@ exports.createEmployee = async (req, res) => {
             return res.status(400).json({
                 message: "Missing firstName or email or phone or required fields",
             });
-        }   
+        }
 
         const existingEmail = await User.findOne({
             email: email.toLowerCase(),
@@ -164,24 +187,29 @@ exports.createEmployee = async (req, res) => {
             employeeProfile,
         });
 
-        // try {
-        //     const mail = employeeWelcomeTemplate({
-        //         fullName: `${firstName} ${lastName}`,
-        //         email,
-        //         password: plainPassword,
-        //         companyName,
-        //     });
+        try {
+            const mail = employeeWelcomeTemplate({
+                fullName: `${firstName} ${lastName}`,
+                email,
+                password: plainPassword,
+                companyName,
+            });
 
-        //     await sendSimpleMail({
-        //         to: email,
-        //         subject: mail.subject,
-        //         html: mail.html,
-        //         text: mail.text,
-        //     });
-        // } catch (mailError) {
-        //     await User.findByIdAndDelete(employee._id);
-        //     throw new Error("Employee created but email failed");
-        // }
+            await sendSimpleMail({
+                to: email,
+                subject: mail.subject,
+                html: mail.html,
+                text: mail.text,
+            });
+        } catch (mailError) {
+            await User.findByIdAndDelete(employee._id);
+            throw new Error("Employee created but email failed");
+        }
+
+        await Company.findByIdAndUpdate(
+            company._id,
+            { $inc: { currentEmployeeCount: 1 } }
+        );
 
         return res.status(201).json({
             message: "Employee created successfully and email sent",
@@ -214,7 +242,7 @@ exports.createEmployee = async (req, res) => {
 
 exports.getAllEmployees = async (req, res) => {
     try {
-         
+
 
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
@@ -557,25 +585,25 @@ exports.updateEmployee = async (req, res) => {
 
         await employee.save();
 
-        // if (passwordChanged) {
-        //     try {
-        //         const mail = passwordUpdatedTemplate({
-        //             fullName: `${employee.firstName} ${employee.lastName}`,
-        //             email: employee.email,
-        //             password: newPlainPassword,
-        //             companyName,
-        //         });
+        if (passwordChanged) {
+            try {
+                const mail = passwordUpdatedTemplate({
+                    fullName: `${employee.firstName} ${employee.lastName}`,
+                    email: employee.email,
+                    password: newPlainPassword,
+                    companyName,
+                });
 
-        //         await sendSimpleMail({
-        //             to: employee.email,
-        //             subject: mail.subject,
-        //             html: mail.html,
-        //             text: mail.text,
-        //         });
-        //     } catch (mailError) {
-        //         console.error("Password email failed:", mailError);
-        //     }
-        // }
+                await sendSimpleMail({
+                    to: employee.email,
+                    subject: mail.subject,
+                    html: mail.html,
+                    text: mail.text,
+                });
+            } catch (mailError) {
+                console.error("Password email failed:", mailError);
+            }
+        }
 
         const result = employee.toObject();
         delete result.password;
@@ -644,7 +672,46 @@ exports.toggleEmployeeDeleteByCompanyAdmin = async (req, res) => {
             });
         }
 
+        // ✅ Get Company
+        const company = await Company.findById(loggedUser.company);
+
+        if (!company) {
+            return res.status(404).json({
+                message: "Company not found",
+            });
+        }
+
+    
+        const plan = await Plan.findById(company.planId);
+
+        if (!plan) {
+            return res.status(400).json({
+                message: "Company plan not found",
+            });
+        }
+
         const newIsDeleted = !employee.isDeleted;
+
+        if (!newIsDeleted) {
+            // restore means employee.isDeleted was true → now false
+
+            if (company.currentEmployeeCount >= plan.employeeLimit) {
+                return res.status(400).json({
+                    message: `Cannot restore employee. Limit reached (${plan.employeeLimit})`,
+                });
+            }
+
+            await Company.findByIdAndUpdate(company._id, {
+                $inc: { currentEmployeeCount: 1 },
+            });
+        }
+
+        if (newIsDeleted) {
+            await Company.findOneAndUpdate(
+                { _id: company._id, currentEmployeeCount: { $gt: 0 } },
+                { $inc: { currentEmployeeCount: -1 } }
+            );
+        }
 
         employee.isDeleted = newIsDeleted;
         await employee.save();
@@ -663,3 +730,4 @@ exports.toggleEmployeeDeleteByCompanyAdmin = async (req, res) => {
         });
     }
 };
+

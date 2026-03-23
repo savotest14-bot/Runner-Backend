@@ -19,7 +19,10 @@ const companySchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-
+   logo:{
+      type: String,
+      default: null
+   },
     contactEmail: {
       type: String,
       required: true,
@@ -73,20 +76,27 @@ const companySchema = new mongoose.Schema(
       enum: ["monthly", "yearly"],
       default: null,
     },
-     paymentId: {
+    paymentId: {
       type: String,
       default: null,
     },
     paymentStatus: {
-        type: String,
-        enum: ["pending", "paid", "failed"],
-        default: "pending",
+      type: String,
+      enum: ["pending", "paid", "failed"],
+      default: "pending",
     },
     licenseNo: {
       type: String,
       trim: true,
     },
-
+     isApproved: {
+      type: String,
+      enum: {
+        values: ["pending", "approved", "rejected", "banned"]
+      },
+      default: "pending",
+      index: true,
+    },
     licenseExpiryDate: {
       type: Date,
       default: null,
@@ -103,6 +113,11 @@ const companySchema = new mongoose.Schema(
       },
     ],
 
+    currentEmployeeCount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     address: addressSchema,
 
     status: {
