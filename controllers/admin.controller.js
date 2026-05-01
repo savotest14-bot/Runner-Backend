@@ -2352,12 +2352,11 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       isDeleted: false,
     };
 
-    // ✅ company_admin restriction
     if (userRole === "company_admin") {
       matchStage.company = new mongoose.Types.ObjectId(user.company);
     }
 
-    // ================= CHECK GROUP ADMIN =================
+    // ================= FIXED GROUP ADMIN CHECK =================
     let isGroupAdmin = false;
 
     if (userRole === "employee") {
@@ -2366,11 +2365,18 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
         isDeleted: false,
         assignmentType: "TASK",
         task: id,
-        "members.user": user._id,
-        "members.role": "GROUP_ADMIN",
+        members: {
+          $elemMatch: {
+            user: user._id,
+            role: "GROUP_ADMIN",
+          },
+        },
       });
 
       isGroupAdmin = !!group;
+
+      // console.log("userRole:", userRole);
+      // console.log("isGroupAdmin:", isGroupAdmin);
     }
 
     const pipeline = [
@@ -2398,63 +2404,48 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       },
       { $unwind: { path: "$assignedBy", preserveNullAndEmptyArrays: true } },
 
-      // ================= SUBTASKS =================
+      // ================= SUBTASKS (FILTERED HERE) =================
       {
         $lookup: {
           from: "subtasks",
-          localField: "subTasks",
-          foreignField: "_id",
-          as: "subTasks",
-        },
-      },
-
-      // sort subtasks
-      {
-        $addFields: {
-          subTasks: {
-            $sortArray: {
-              input: "$subTasks",
-              sortBy: { createdAt: -1 },
-            },
-          },
-        },
-      },
-
-      // ================= ROLE-BASED SUBTASK FILTER =================
-      {
-        $addFields: {
-          subTasks: {
-            $cond: {
-              if: {
-                $and: [
-                  { $eq: [userRole, "employee"] },
-                  { $eq: [isGroupAdmin, false] },
-                ],
-              },
-              then: {
-                $filter: {
-                  input: "$subTasks",
-                  as: "sub",
-                  cond: {
-                    $in: [userId, "$$sub.assignedTo"],
-                  },
+          let: { subTaskIds: "$subTasks" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $in: ["$_id", "$$subTaskIds"],
                 },
               },
-              else: "$subTasks",
             },
-          },
+
+            // ✅ Only assigned subtasks for normal employee
+            ...(userRole === "employee" && !isGroupAdmin
+              ? [
+                  {
+                    $match: {
+                      $expr: {
+                        $in: [userId, "$assignedTo"],
+                      },
+                    },
+                  },
+                ]
+              : []),
+
+            { $sort: { createdAt: -1 } },
+          ],
+          as: "subTasks",
         },
       },
 
       // ================= BLOCK EMPTY TASK =================
       ...(userRole === "employee" && !isGroupAdmin
         ? [
-          {
-            $match: {
-              $expr: { $gt: [{ $size: "$subTasks" }, 0] },
+            {
+              $match: {
+                $expr: { $gt: [{ $size: "$subTasks" }, 0] },
+              },
             },
-          },
-        ]
+          ]
         : []),
 
       // ================= ASSIGNED USERS =================
@@ -2559,7 +2550,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
             },
           },
 
-          // ✅ UPDATED ASSIGNED TO LOGIC
+          // ✅ Assigned users with names
           subTasks: {
             $map: {
               input: "$subTasks",
@@ -2575,17 +2566,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
                             input: "$assignedUsers",
                             as: "user",
                             cond: {
-                              $and: [
-                                {
-                                  $in: [
-                                    "$$user._id",
-                                    "$$sub.assignedTo",
-                                  ],
-                                },
-                                ...(userRole === "employee" && !isGroupAdmin
-                                  ? [{ $eq: ["$$user._id", userId] }]
-                                  : []),
-                              ],
+                              $in: ["$$user._id", "$$sub.assignedTo"],
                             },
                           },
                         },
@@ -2624,6 +2605,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       success: true,
       data: task[0],
     });
+
   } catch (error) {
     console.error("Get task by id error:", error);
     return res.status(500).json({
