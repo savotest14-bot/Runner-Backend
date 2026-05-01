@@ -2374,9 +2374,6 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       });
 
       isGroupAdmin = !!group;
-
-      // console.log("userRole:", userRole);
-      // console.log("isGroupAdmin:", isGroupAdmin);
     }
 
     const pipeline = [
@@ -2404,7 +2401,40 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       },
       { $unwind: { path: "$assignedBy", preserveNullAndEmptyArrays: true } },
 
-      // ================= SUBTASKS (FILTERED HERE) =================
+      // ================= GROUP (NEW) =================
+      {
+        $lookup: {
+          from: "groups",
+          let: { taskId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$task", "$$taskId"] },
+                    { $eq: ["$isDeleted", false] },
+                  ],
+                },
+              },
+            },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+              },
+            },
+          ],
+          as: "group",
+        },
+      },
+      {
+        $unwind: {
+          path: "$group",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      // ================= SUBTASKS (FILTERED) =================
       {
         $lookup: {
           from: "subtasks",
@@ -2418,7 +2448,6 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
               },
             },
 
-            // ✅ Only assigned subtasks for normal employee
             ...(userRole === "employee" && !isGroupAdmin
               ? [
                   {
@@ -2524,6 +2553,12 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
             companyName: "$company.companyName",
           },
 
+          // ✅ NEW GROUP FIELD
+          group: {
+            groupId: "$group._id",
+            groupName: "$group.name",
+          },
+
           contract: {
             contractId: "$contract._id",
             contractNumber: "$contract.contractNumber",
@@ -2550,7 +2585,6 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
             },
           },
 
-          // ✅ Assigned users with names
           subTasks: {
             $map: {
               input: "$subTasks",
