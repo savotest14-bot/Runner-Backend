@@ -2558,7 +2558,44 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
             },
           },
 
-          subTasks: 1,
+          subTasks: {
+            $map: {
+              input: "$subTasks",
+              as: "sub",
+              in: {
+                $mergeObjects: [
+                  "$$sub",
+                  {
+                    assignedTo: {
+                      $map: {
+                        input: {
+                          $filter: {
+                            input: "$assignedUsers",
+                            as: "user",
+                            cond: {
+                              $in: ["$$user._id", "$$sub.assignedTo"],
+                            },
+                          },
+                        },
+                        as: "user",
+                        in: {
+                          userId: "$$user._id",
+                          name: {
+                            $concat: [
+                              { $ifNull: ["$$user.firstName", ""] },
+                              " ",
+                              { $ifNull: ["$$user.lastName", ""] },
+                            ],
+                          },
+                          email: "$$user.email",
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
         },
       },
     ];
