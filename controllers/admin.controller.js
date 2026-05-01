@@ -2408,6 +2408,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
         },
       },
 
+      // sort subtasks
       {
         $addFields: {
           subTasks: {
@@ -2427,7 +2428,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
               if: {
                 $and: [
                   { $eq: [userRole, "employee"] },
-                  { $eq: [isGroupAdmin, false] }, // 👈 KEY LOGIC
+                  { $eq: [isGroupAdmin, false] },
                 ],
               },
               then: {
@@ -2445,7 +2446,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
         },
       },
 
-      // ================= BLOCK EMPTY TASK FOR EMPLOYEE =================
+      // ================= BLOCK EMPTY TASK =================
       ...(userRole === "employee" && !isGroupAdmin
         ? [
           {
@@ -2558,6 +2559,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
             },
           },
 
+          // ✅ UPDATED ASSIGNED TO LOGIC
           subTasks: {
             $map: {
               input: "$subTasks",
@@ -2573,7 +2575,17 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
                             input: "$assignedUsers",
                             as: "user",
                             cond: {
-                              $in: ["$$user._id", "$$sub.assignedTo"],
+                              $and: [
+                                {
+                                  $in: [
+                                    "$$user._id",
+                                    "$$sub.assignedTo",
+                                  ],
+                                },
+                                ...(userRole === "employee" && !isGroupAdmin
+                                  ? [{ $eq: ["$$user._id", userId] }]
+                                  : []),
+                              ],
                             },
                           },
                         },
@@ -2612,7 +2624,6 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       success: true,
       data: task[0],
     });
-
   } catch (error) {
     console.error("Get task by id error:", error);
     return res.status(500).json({
