@@ -7,32 +7,58 @@ const SubTask = require("../models/subtask");
 const Property = require("../models/property");
 const fs = require("fs");
 const WorkReport = require("../models/WorkReport");
+const Group = require("../models/group")
 
 
 exports.getAllTasksForCompanyAdmin = async (req, res) => {
   try {
     const user = req.user;
 
-    if (user.role.name !== "company_admin") {
-      return res.status(403).json({
-        message: "Only company admin can access tasks",
-      });
-    }
-
     const { page = 1, limit = 10, status, contractId } = req.query;
 
     const skip = (page - 1) * limit;
 
-    const filter = {
+    let filter = {
       company: user.company,
       isDeleted: false,
     };
 
+    // ================= ROLE LOGIC =================
+
+    if (user.role.name === "company_admin") {
+      // ✅ company_admin → see all tasks (no extra filter)
+    } else {
+      // 👷 employee → check if GROUP_ADMIN in any group
+
+      const groups = await Group.find({
+        company: user.company,
+        isDeleted: false,
+        "members.user": user._id,
+        "members.role": "GROUP_ADMIN",
+        assignmentType: "TASK",
+      }).select("task");
+
+      const taskIds = groups.map((g) => g.task).filter(Boolean);
+
+      // ❌ if not group admin anywhere → no access
+      if (!taskIds.length) {
+        return res.status(200).json({
+          success: true,
+          totalTasks: 0,
+          data: [],
+        });
+      }
+
+      // ✅ restrict tasks
+      filter._id = { $in: taskIds };
+    }
+
+    // ================= STATUS FILTER =================
     if (status) {
       filter.status = status;
     }
 
-    // ✅ FILTER BY CONTRACT
+    // ================= CONTRACT FILTER =================
     if (contractId) {
       const contract = await Contract.findOne({
         _id: contractId,
@@ -46,14 +72,16 @@ exports.getAllTasksForCompanyAdmin = async (req, res) => {
         });
       }
 
-      filter._id = { $in: contract.tasks };
+      // combine filters
+      filter._id = filter._id
+        ? { $in: contract.tasks.filter(id => filter._id.$in.includes(id.toString())) }
+        : { $in: contract.tasks };
     }
 
+    // ================= FETCH TASKS =================
     const tasks = await Task.find(filter)
       .populate("assignedBy", "firstName lastName email")
       .populate("company", "companyName")
-
-      // ✅ FIXED: SUBTASK POPULATE
       .populate({
         path: "subTasks",
         populate: {
@@ -61,7 +89,6 @@ exports.getAllTasksForCompanyAdmin = async (req, res) => {
           select: "firstName lastName email",
         },
       })
-
       .sort({ createdAt: -1 })
       .skip(Number(skip))
       .limit(Number(limit))

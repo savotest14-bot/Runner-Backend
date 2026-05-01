@@ -17,7 +17,7 @@ router.get("/getAllClients", authenticate, authorize("view_contracts"), getAllCl
 router.get(
   "/getAllProperties",
   authenticate,
-  // authorize("view_properties"),
+  authorize("view_properties"),
   getAllPropertiesForCompanyAdmin
 );
 

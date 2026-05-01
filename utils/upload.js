@@ -8,7 +8,9 @@ const BASE_UPLOAD_PATH = path.join(process.cwd(), "uploads");
 const UPLOAD_PATHS = Object.freeze({
  workImage:"workImage",
  ticketFile:"ticketFile",
- chatFile:"chatFile"
+ chatFile:"chatFile",
+ licenseDocuments:"licenses",
+ companyLogo:"company-logos"
 });
 
 const ensureDir = (dir) => {

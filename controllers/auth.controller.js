@@ -523,14 +523,103 @@ exports.getRoles = async (req, res) => {
   }
 };
 
+// exports.companyAdminSignup = async (req, res) => {
+//   try {
+//     const files = req.files || [];
+
+//     const licenseDocuments = files.map((file) => ({
+//       fileName: file.originalname,
+//       fileUrl: `/uploads/licenses/${file.filename}`,
+//     }));
+
+//     const {
+//       companyName,
+//       contactEmail,
+//       phoneNumber,
+//       password,
+//       licenseNo,
+//       licenseExpiryDate,
+//       firstName,
+//       lastName,
+//       addressLine1,
+//       addressLine2,
+//       city,
+//       state,
+//       country,
+//       pincode,
+//     } = req.body;
+
+
+//     const address = {
+//       addressLine1,
+//       addressLine2,
+//       city,
+//       state,
+//       country,
+//       pincode,
+//     };
+
+//     const { company, companyAdmin } =
+//       await createCompanyAndAdmin({
+//         companyData: {
+//           companyName,
+//           contactEmail,
+//           phoneNumber,
+//           licenseNo,
+//           licenseExpiryDate,
+//           address,
+//           licenseDocuments,
+//         },
+//         adminData: {
+//           email: contactEmail,
+//           phone: phoneNumber,
+//           password,
+//           firstName,
+//           lastName,
+//         },
+//         createdByUserId: null,
+//       });
+
+//     return res.status(201).json({
+//       message: "Signup successful",
+//       companyId: company._id,
+//       adminId: companyAdmin._id,
+//     });
+//   } catch (error) {
+
+//     if (req.files?.length) {
+//       req.files.forEach((file) => {
+//         fs.unlink(
+//           path.join("uploads/licenses", file.filename),
+//           () => { }
+//         );
+//       });
+//     }
+
+//     return res.status(400).json({
+//       message: error.message,
+//     });
+//   }
+// };
+
+
 exports.companyAdminSignup = async (req, res) => {
   try {
-    const files = req.files || [];
+    const files = req.files || {};
 
-    const licenseDocuments = files.map((file) => ({
+    // ✅ License docs
+    const licenseFiles = files.licenseDocuments || [];
+    const licenseDocuments = licenseFiles.map((file) => ({
       fileName: file.originalname,
       fileUrl: `/uploads/licenses/${file.filename}`,
     }));
+
+    // ✅ Company logo (single)
+    const logoFile = files.companyLogo?.[0] || null;
+
+    const companyLogo = logoFile
+      ? `/uploads/company-logos/${logoFile.filename}`
+      : null;
 
     const {
       companyName,
@@ -548,7 +637,6 @@ exports.companyAdminSignup = async (req, res) => {
       country,
       pincode,
     } = req.body;
-
 
     const address = {
       addressLine1,
@@ -569,6 +657,7 @@ exports.companyAdminSignup = async (req, res) => {
           licenseExpiryDate,
           address,
           licenseDocuments,
+          logo: companyLogo, // ✅ ADDED
         },
         adminData: {
           email: contactEmail,
@@ -585,14 +674,18 @@ exports.companyAdminSignup = async (req, res) => {
       companyId: company._id,
       adminId: companyAdmin._id,
     });
+
   } catch (error) {
 
-    if (req.files?.length) {
-      req.files.forEach((file) => {
-        fs.unlink(
-          path.join("uploads/licenses", file.filename),
-          () => { }
-        );
+    // ✅ cleanup both folders
+    if (req.files) {
+      Object.values(req.files).flat().forEach((file) => {
+        const folder =
+          file.fieldname === "companyLogo"
+            ? "uploads/company-logos"
+            : "uploads/licenses";
+
+        fs.unlink(path.join(folder, file.filename), () => {});
       });
     }
 

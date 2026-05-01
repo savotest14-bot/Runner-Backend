@@ -12,7 +12,7 @@ const {
 } = require("../validations/validator");
 const validate = require("../middlewares/validate");
 const authenticate = require("../middlewares/authenticate");
-
+const { uploads } = require("../utils/upload");
 
 router.post("/login", validate(userLogin), login);
 router.post('/forgot-password', validate(emailValidation), forgotPassword);
@@ -21,6 +21,13 @@ router.post('/reset-password/:token', validate(resetPasswordValidation), resetPa
 router.post("/logout", logout);
 router.get("/getRole", authenticate, getRoles);
 router.post("/resendOtp", authenticate, resendOtp);
-router.post("/signup/company-admin", uploadLicenseDocs, companyAdminSignup);
+router.post(
+  "/signup/company-admin",
+  uploads.fields([
+    { name: "licenseDocuments", maxCount: 5 },
+    { name: "companyLogo", maxCount: 1 },
+  ]),
+  companyAdminSignup
+);
 
 module.exports = router;

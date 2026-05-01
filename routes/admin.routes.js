@@ -38,6 +38,7 @@ const {
   searchCompanies,
   getSuperAdminDashboard,
   getEmployeePayments,
+  getAllDocuments,
 } = require("../controllers/admin.controller");
 
 const {
@@ -50,6 +51,7 @@ const {
   uploadEmployeeImages,
 } = require("../middlewares/employeeUploads");
 const { assignUsersToSubTask, removeUsersFromSubTask } = require("../controllers/task");
+const { uploads } = require("../utils/upload");
 
 /**Admin company Routes */
 
@@ -57,7 +59,10 @@ router.post(
   "/create-company",
   authenticate,
   authorize("create_company"),
-  uploadLicenseDocs,
+  uploads.fields([
+    { name: "licenseDocuments", maxCount: 5 },
+    { name: "companyLogo", maxCount: 1 },
+  ]),
   adminCreateCompany,
 );
 
@@ -195,7 +200,6 @@ router.get(
 router.get(
   "/getTask/:id",
   authenticate,
-  authorize("view_tasks"),
   getTaskByIdForSuperAdmin,
 );
 
@@ -241,6 +245,8 @@ router.put("/removeUsers/:subTaskId", authenticate, removeUsersFromSubTask);
 
 router.get("/getSuperAdminDashboard", authenticate, getSuperAdminDashboard);
 
-router.get("/getEmployeePayments", authenticate, getEmployeePayments)
+router.get("/getEmployeePayments", authenticate, getEmployeePayments);
+
+router.get("/getAllDocuments", authenticate, getAllDocuments)
 
 module.exports = router;

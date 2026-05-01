@@ -15,14 +15,106 @@ const Invoice = require("../models/Invoice");
 const Contract = require("../models/contract")
 const SubTask = require("../models/subtask");
 const EmployeePayment = require("../models/EmployeePayment");
+const Group = require("../models/group")
+
+// exports.adminCreateCompany = async (req, res) => {
+//   try {
+//     const files = req.files || [];
+//     const licenseDocuments = files.map((file) => ({
+//       fileName: file.originalname,
+//       fileUrl: `/uploads/licenses/${file.filename}`,
+//     }));
+
+//     const {
+//       companyName,
+//       contactEmail,
+//       phoneNumber,
+//       adminPassword,
+//       licenseNo,
+//       licenseExpiryDate,
+//       firstName,
+//       lastName,
+//       addressLine1,
+//       addressLine2,
+//       city,
+//       state,
+//       country,
+//       pincode,
+//     } = req.body;
+
+//     if (!companyName || !contactEmail || !phoneNumber || !adminPassword) {
+//       return res.status(400).json({
+//         message: "Missing required fields",
+//       });
+//     }
+
+//     const address = {
+//       addressLine1,
+//       addressLine2,
+//       city,
+//       state,
+//       country,
+//       pincode,
+//     };
+
+//     const isApproved = "approved";
+//     const { company, companyAdmin } = await createCompanyAndAdmin({
+//       companyData: {
+//         companyName,
+//         contactEmail,
+//         phoneNumber,
+//         licenseNo,
+//         licenseExpiryDate,
+//         address,
+//         licenseDocuments,
+//         isApproved,
+//       },
+//       adminData: {
+//         email: contactEmail,
+//         phone: phoneNumber,
+//         password: adminPassword,
+//         isApproved,
+//         firstName,
+//         lastName,
+//       },
+//       createdByUserId: req.user._id,
+//     });
+
+//     return res.status(201).json({
+//       message: "Company and Company Admin created successfully",
+//       companyId: company._id,
+//       adminId: companyAdmin._id,
+//     });
+//   } catch (err) {
+//     if (req.files?.length) {
+//       req.files.forEach((file) => {
+//         fs.unlink(path.join("uploads/licenses", file.filename), () => { });
+//       });
+//     }
+
+//     return res.status(400).json({
+//       message: err.message,
+//     });
+//   }
+// };
+
 
 exports.adminCreateCompany = async (req, res) => {
   try {
-    const files = req.files || [];
-    const licenseDocuments = files.map((file) => ({
+    const files = req.files || {};
+
+    // ✅ License documents (multiple)
+    const licenseFiles = files.licenseDocuments || [];
+    const licenseDocuments = licenseFiles.map((file) => ({
       fileName: file.originalname,
       fileUrl: `/uploads/licenses/${file.filename}`,
     }));
+
+    // ✅ Company logo (single)
+    const logoFile = files.companyLogo?.[0] || null;
+    const companyLogo = logoFile
+      ? `/uploads/company-logos/${logoFile.filename}`
+      : null;
 
     const {
       companyName,
@@ -57,6 +149,7 @@ exports.adminCreateCompany = async (req, res) => {
     };
 
     const isApproved = "approved";
+
     const { company, companyAdmin } = await createCompanyAndAdmin({
       companyData: {
         companyName,
@@ -66,6 +159,7 @@ exports.adminCreateCompany = async (req, res) => {
         licenseExpiryDate,
         address,
         licenseDocuments,
+        logo: companyLogo, // ✅ ADDED
         isApproved,
       },
       adminData: {
@@ -84,10 +178,18 @@ exports.adminCreateCompany = async (req, res) => {
       companyId: company._id,
       adminId: companyAdmin._id,
     });
+
   } catch (err) {
-    if (req.files?.length) {
-      req.files.forEach((file) => {
-        fs.unlink(path.join("uploads/licenses", file.filename), () => { });
+
+    // ✅ Proper cleanup for both fields
+    if (req.files) {
+      Object.values(req.files).flat().forEach((file) => {
+        const folder =
+          file.fieldname === "companyLogo"
+            ? "uploads/company-logos"
+            : "uploads/licenses";
+
+        fs.unlink(path.join(folder, file.filename), () => { });
       });
     }
 
@@ -96,80 +198,6 @@ exports.adminCreateCompany = async (req, res) => {
     });
   }
 };
-
-// exports.getAllCompanies = async (req, res) => {
-//   try {
-//     const page = parseInt(req.query.page) || 1;
-//     const limit = parseInt(req.query.limit) || 10;
-//     const search = req.query.search || "";
-//     const city = req.query.city || "";
-
-//     const skip = (page - 1) * limit;
-
-//     const matchStage = {
-//       isDeleted: false,
-//       ...(city && {
-//         "address.city": { $regex: city, $options: "i" },
-//       }),
-//       ...(search && {
-//         $or: [
-//           { companyName: { $regex: search, $options: "i" } },
-//           { contactEmail: { $regex: search, $options: "i" } },
-//           { phoneNumber: { $regex: search, $options: "i" } },
-//         ],
-//       }),
-//     };
-
-//     const pipeline = [
-//       { $match: matchStage },
-
-//       {
-//         $project: {
-//           _id: 0,
-//           companyId: "$_id",
-//           companyName: 1,
-//           contactEmail: 1,
-//           phoneNumber: 1,
-//           createdAt: 1,
-//           isApproved: 1,
-//           licenseExpiryDate: 1,
-//           licenseNo: 1,
-//           paymentFrequency: 1,
-//           subscriptionAmount: 1,
-//           subscriptionStatus: 1,
-//           address:1,
-//         },
-//       },
-
-//       { $sort: { createdAt: -1 } },
-//       { $skip: skip },
-//       { $limit: limit },
-//     ];
-
-//     const [companies, total] = await Promise.all([
-//       Company.aggregate(pipeline),
-//       Company.countDocuments(matchStage),
-//     ]);
-
-//     return res.status(200).json({
-//       success: true,
-//       data: companies,
-//       pagination: {
-//         total,
-//         page,
-//         limit,
-//         totalPages: Math.ceil(total / limit),
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Get companies error:", error);
-//     return res.status(500).json({
-//       message: "Failed to fetch companies",
-//     });
-//   }
-// };
-
-
 
 exports.getAllCompanies = async (req, res) => {
   try {
@@ -2027,6 +2055,285 @@ exports.getAllTasksForSuperAdmin = async (req, res) => {
   }
 };
 
+// exports.getTaskByIdForSuperAdmin = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     if (!mongoose.Types.ObjectId.isValid(id)) {
+//       return res.status(400).json({ message: "Invalid task id" });
+//     }
+
+//     const employeeId = new mongoose.Types.ObjectId(req.user._id);
+//     const userRole = req.user.role.name;
+
+//     const pipeline = [
+//       {
+//         $match: {
+//           _id: new mongoose.Types.ObjectId(id),
+//           isDeleted: false,
+//         },
+//       },
+
+//       // ✅ Company
+//       {
+//         $lookup: {
+//           from: "companies",
+//           localField: "company",
+//           foreignField: "_id",
+//           as: "company",
+//         },
+//       },
+//       { $unwind: { path: "$company", preserveNullAndEmptyArrays: true } },
+
+//       // ✅ Assigned By
+//       {
+//         $lookup: {
+//           from: "users",
+//           localField: "assignedBy",
+//           foreignField: "_id",
+//           as: "assignedBy",
+//         },
+//       },
+//       { $unwind: { path: "$assignedBy", preserveNullAndEmptyArrays: true } },
+
+//       // ✅ SubTasks
+//       {
+//         $lookup: {
+//           from: "subtasks",
+//           localField: "subTasks",
+//           foreignField: "_id",
+//           as: "subTasks",
+//         },
+//       },
+
+//       // ✅ Sort SubTasks
+//       {
+//         $addFields: {
+//           subTasks: {
+//             $sortArray: {
+//               input: "$subTasks",
+//               sortBy: { createdAt: -1 },
+//             },
+//           },
+//         },
+//       },
+
+//       // ✅ Role-based filtering
+//       {
+//         $addFields: {
+//           subTasks: {
+//             $cond: {
+//               if: { $eq: [userRole, "employee"] },
+//               then: {
+//                 $filter: {
+//                   input: "$subTasks",
+//                   as: "sub",
+//                   cond: {
+//                     $in: [employeeId, "$$sub.assignedTo"],
+//                   },
+//                 },
+//               },
+//               else: "$subTasks",
+//             },
+//           },
+//         },
+//       },
+
+//       // ✅ Hide task if no subtask for employee
+//       ...(userRole === "employee"
+//         ? [
+//           {
+//             $match: {
+//               $expr: { $gt: [{ $size: "$subTasks" }, 0] },
+//             },
+//           },
+//         ]
+//         : []),
+
+//       // ✅ Assigned Users
+//       {
+//         $lookup: {
+//           from: "users",
+//           localField: "subTasks.assignedTo",
+//           foreignField: "_id",
+//           as: "assignedUsers",
+//         },
+//       },
+
+//       // ✅ Contract
+//       {
+//         $lookup: {
+//           from: "contracts",
+//           let: { taskId: "$_id" },
+//           pipeline: [
+//             {
+//               $match: {
+//                 $expr: {
+//                   $and: [
+//                     { $in: ["$$taskId", "$tasks"] },
+//                     { $eq: ["$isDeleted", false] },
+//                   ],
+//                 },
+//               },
+//             },
+//           ],
+//           as: "contract",
+//         },
+//       },
+//       { $unwind: { path: "$contract", preserveNullAndEmptyArrays: true } },
+
+//       // ✅ Property (via contract)
+//       {
+//         $lookup: {
+//           from: "properties",
+//           localField: "contract.property",
+//           foreignField: "_id",
+//           as: "property",
+//         },
+//       },
+//       { $unwind: { path: "$property", preserveNullAndEmptyArrays: true } },
+
+//       // ✅ Client (via property)
+//       {
+//         $lookup: {
+//           from: "clients",
+//           localField: "property.client",
+//           foreignField: "_id",
+//           as: "client",
+//         },
+//       },
+//       { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
+
+//       // ✅ FINAL RESPONSE
+//       {
+//         $project: {
+//           _id: 0,
+//           taskId: "$_id",
+
+//           // ✅ Task Details
+//           taskDetails: {
+//             taskId: "$_id",
+//             taskName: "$taskName",
+//             taskCategory: "$taskCategory",
+//             taskSubCategory: "$taskSubCategory",
+//             taskPrice: "$taskPrice",
+//             taskDescription: "$taskDescription",
+//             status: "$status",
+//             createdAt: "$createdAt",
+//             updatedAt: "$updatedAt",
+//           },
+
+//           // ✅ Company
+//           company: {
+//             companyId: "$company._id",
+//             companyName: "$company.companyName",
+//           },
+
+//           // ✅ Contract
+//           contract: {
+//             contractId: "$contract._id",
+//             contractNumber: "$contract.contractNumber",
+//           },
+
+//           // ✅ Property
+//           property: {
+//             propertyId: "$property._id",
+//             propertyName: "$property.propertyName",
+//             propertyType: "$property.propertyType",
+//             address: "$property.location.address",
+//             coordinates: "$property.location.coordinates",
+//           },
+
+//           // ✅ Client
+//           client: {
+//             clientId: "$client._id",
+//             name: {
+//               $concat: [
+//                 { $ifNull: ["$client.firstName", ""] },
+//                 " ",
+//                 { $ifNull: ["$client.lastName", ""] },
+//               ],
+//             },
+//             email: "$client.email",
+//             contactNo: "$client.phoneNumber", // ⚠️ adjust if needed
+//           },
+
+//           // ✅ Assigned By
+//           assignedBy: {
+//             userId: "$assignedBy._id",
+//             name: {
+//               $concat: [
+//                 { $ifNull: ["$assignedBy.firstName", ""] },
+//                 " ",
+//                 { $ifNull: ["$assignedBy.lastName", ""] },
+//               ],
+//             },
+//             email: "$assignedBy.email",
+//           },
+
+//           // ✅ Full SubTask Details
+//           subTasks: {
+//             $map: {
+//               input: "$subTasks",
+//               as: "sub",
+//               in: {
+//                 $mergeObjects: [
+//                   "$$sub",
+//                   {
+//                     assignedTo: {
+//                       $map: {
+//                         input: {
+//                           $filter: {
+//                             input: "$assignedUsers",
+//                             as: "user",
+//                             cond: {
+//                               $in: ["$$user._id", "$$sub.assignedTo"],
+//                             },
+//                           },
+//                         },
+//                         as: "user",
+//                         in: {
+//                           userId: "$$user._id",
+//                           name: {
+//                             $concat: [
+//                               "$$user.firstName",
+//                               " ",
+//                               "$$user.lastName",
+//                             ],
+//                           },
+//                           email: "$$user.email",
+//                         },
+//                       },
+//                     },
+//                   },
+//                 ],
+//               },
+//             },
+//           },
+//         },
+//       },
+//     ];
+
+//     const task = await Task.aggregate(pipeline);
+
+//     if (!task.length) {
+//       return res.status(404).json({ message: "Task not found" });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       data: task[0],
+//     });
+
+//   } catch (error) {
+//     console.error("Get task by id error:", error);
+//     return res.status(500).json({
+//       message: "Failed to fetch task",
+//     });
+//   }
+// };
+
+
 exports.getTaskByIdForSuperAdmin = async (req, res) => {
   try {
     const { id } = req.params;
@@ -2035,18 +2342,41 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       return res.status(400).json({ message: "Invalid task id" });
     }
 
-    const employeeId = new mongoose.Types.ObjectId(req.user._id);
-    const userRole = req.user.role.name;
+    const user = req.user;
+    const userId = new mongoose.Types.ObjectId(user._id);
+    const userRole = user.role.name;
+
+    // ================= BASE MATCH =================
+    let matchStage = {
+      _id: new mongoose.Types.ObjectId(id),
+      isDeleted: false,
+    };
+
+    // ✅ company_admin restriction
+    if (userRole === "company_admin") {
+      matchStage.company = new mongoose.Types.ObjectId(user.company);
+    }
+
+    // ================= CHECK GROUP ADMIN =================
+    let isGroupAdmin = false;
+
+    if (userRole === "employee") {
+      const group = await Group.findOne({
+        company: user.company,
+        isDeleted: false,
+        assignmentType: "TASK",
+        task: id,
+        "members.user": user._id,
+        "members.role": "GROUP_ADMIN",
+      });
+
+      isGroupAdmin = !!group;
+    }
 
     const pipeline = [
-      {
-        $match: {
-          _id: new mongoose.Types.ObjectId(id),
-          isDeleted: false,
-        },
-      },
+      { $match: matchStage },
 
-      // ✅ Company
+      // ================= COMPANY =================
       {
         $lookup: {
           from: "companies",
@@ -2057,7 +2387,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       },
       { $unwind: { path: "$company", preserveNullAndEmptyArrays: true } },
 
-      // ✅ Assigned By
+      // ================= ASSIGNED BY =================
       {
         $lookup: {
           from: "users",
@@ -2068,7 +2398,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       },
       { $unwind: { path: "$assignedBy", preserveNullAndEmptyArrays: true } },
 
-      // ✅ SubTasks
+      // ================= SUBTASKS =================
       {
         $lookup: {
           from: "subtasks",
@@ -2078,7 +2408,6 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
         },
       },
 
-      // ✅ Sort SubTasks
       {
         $addFields: {
           subTasks: {
@@ -2090,18 +2419,23 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
         },
       },
 
-      // ✅ Role-based filtering
+      // ================= ROLE-BASED SUBTASK FILTER =================
       {
         $addFields: {
           subTasks: {
             $cond: {
-              if: { $eq: [userRole, "employee"] },
+              if: {
+                $and: [
+                  { $eq: [userRole, "employee"] },
+                  { $eq: [isGroupAdmin, false] }, // 👈 KEY LOGIC
+                ],
+              },
               then: {
                 $filter: {
                   input: "$subTasks",
                   as: "sub",
                   cond: {
-                    $in: [employeeId, "$$sub.assignedTo"],
+                    $in: [userId, "$$sub.assignedTo"],
                   },
                 },
               },
@@ -2111,8 +2445,8 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
         },
       },
 
-      // ✅ Hide task if no subtask for employee
-      ...(userRole === "employee"
+      // ================= BLOCK EMPTY TASK FOR EMPLOYEE =================
+      ...(userRole === "employee" && !isGroupAdmin
         ? [
           {
             $match: {
@@ -2122,7 +2456,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
         ]
         : []),
 
-      // ✅ Assigned Users
+      // ================= ASSIGNED USERS =================
       {
         $lookup: {
           from: "users",
@@ -2132,7 +2466,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
         },
       },
 
-      // ✅ Contract
+      // ================= CONTRACT =================
       {
         $lookup: {
           from: "contracts",
@@ -2154,7 +2488,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       },
       { $unwind: { path: "$contract", preserveNullAndEmptyArrays: true } },
 
-      // ✅ Property (via contract)
+      // ================= PROPERTY =================
       {
         $lookup: {
           from: "properties",
@@ -2165,7 +2499,7 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       },
       { $unwind: { path: "$property", preserveNullAndEmptyArrays: true } },
 
-      // ✅ Client (via property)
+      // ================= CLIENT =================
       {
         $lookup: {
           from: "clients",
@@ -2176,13 +2510,12 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
       },
       { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
 
-      // ✅ FINAL RESPONSE
+      // ================= FINAL RESPONSE =================
       {
         $project: {
           _id: 0,
           taskId: "$_id",
 
-          // ✅ Task Details
           taskDetails: {
             taskId: "$_id",
             taskName: "$taskName",
@@ -2192,45 +2525,28 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
             taskDescription: "$taskDescription",
             status: "$status",
             createdAt: "$createdAt",
-            updatedAt: "$updatedAt",
           },
 
-          // ✅ Company
           company: {
             companyId: "$company._id",
             companyName: "$company.companyName",
           },
 
-          // ✅ Contract
           contract: {
             contractId: "$contract._id",
             contractNumber: "$contract.contractNumber",
           },
 
-          // ✅ Property
           property: {
             propertyId: "$property._id",
             propertyName: "$property.propertyName",
-            propertyType: "$property.propertyType",
-            address: "$property.location.address",
-            coordinates: "$property.location.coordinates",
           },
 
-          // ✅ Client
           client: {
             clientId: "$client._id",
-            name: {
-              $concat: [
-                { $ifNull: ["$client.firstName", ""] },
-                " ",
-                { $ifNull: ["$client.lastName", ""] },
-              ],
-            },
-            email: "$client.email",
-            contactNo: "$client.phoneNumber", // ⚠️ adjust if needed
+            name: "$client.name",
           },
 
-          // ✅ Assigned By
           assignedBy: {
             userId: "$assignedBy._id",
             name: {
@@ -2240,48 +2556,9 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
                 { $ifNull: ["$assignedBy.lastName", ""] },
               ],
             },
-            email: "$assignedBy.email",
           },
 
-          // ✅ Full SubTask Details
-          subTasks: {
-            $map: {
-              input: "$subTasks",
-              as: "sub",
-              in: {
-                $mergeObjects: [
-                  "$$sub",
-                  {
-                    assignedTo: {
-                      $map: {
-                        input: {
-                          $filter: {
-                            input: "$assignedUsers",
-                            as: "user",
-                            cond: {
-                              $in: ["$$user._id", "$$sub.assignedTo"],
-                            },
-                          },
-                        },
-                        as: "user",
-                        in: {
-                          userId: "$$user._id",
-                          name: {
-                            $concat: [
-                              "$$user.firstName",
-                              " ",
-                              "$$user.lastName",
-                            ],
-                          },
-                          email: "$$user.email",
-                        },
-                      },
-                    },
-                  },
-                ],
-              },
-            },
-          },
+          subTasks: 1,
         },
       },
     ];
@@ -2289,7 +2566,9 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
     const task = await Task.aggregate(pipeline);
 
     if (!task.length) {
-      return res.status(404).json({ message: "Task not found" });
+      return res.status(404).json({
+        message: "Task not found or access denied",
+      });
     }
 
     return res.status(200).json({
@@ -2304,7 +2583,6 @@ exports.getTaskByIdForSuperAdmin = async (req, res) => {
     });
   }
 };
-
 
 exports.getAllClientsForSuperAdmin = async (req, res) => {
   try {
@@ -3465,6 +3743,203 @@ exports.getEmployeePayments = async (req, res) => {
     console.error("getEmployeePayments error:", error);
     return res.status(500).json({
       message: "Failed to fetch employee payments",
+    });
+  }
+};
+
+
+exports.getAllDocuments = async (req, res) => {
+  try {
+    const {
+      search = "",
+      type, // employee | contract
+      page = 1,
+      limit = 10,
+    } = req.query;
+
+    const user = req.user;
+
+    const pageNumber = Math.max(parseInt(page), 1);
+    const limitNumber = Math.max(parseInt(limit), 1);
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+    const formatUrl = (url) => {
+      if (!url) return null;
+      return url.startsWith("http") ? url : `${baseUrl}${url}`;
+    };
+
+    // ================= ROLE FILTER =================
+    let userFilter = { isDeleted: false };
+    let contractFilter = { isDeleted: false };
+
+    if (user.role.name !== "superAdmin") {
+      userFilter.company = user.company;
+      contractFilter.company = user.company;
+    }
+
+    // ================= SEARCH =================
+    if (search) {
+      const regex = new RegExp(search, "i");
+
+      userFilter.$or = [
+        { firstName: regex },
+        { lastName: regex },
+        { email: regex },
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $concat: ["$firstName", " ", "$lastName"] },
+              regex: search,
+              options: "i",
+            },
+          },
+        },
+      ];
+
+      contractFilter.$or = [
+        { contractNumber: regex },
+        { invoiceNumber: regex },
+        { referenceNumber: regex },
+      ];
+    }
+
+    let groupedEmployees = [];
+    let groupedContracts = [];
+
+    // ================= EMPLOYEES =================
+    if (!type || type === "employee") {
+      const users = await User.find(userFilter)
+        .select("firstName lastName email employeeProfile")
+        .lean();
+
+      groupedEmployees = users
+        .map((user) => {
+          const profile = user.employeeProfile || {};
+          const docs = profile.documents || {};
+
+          const idImages = (docs.idImages || []).map((doc) => ({
+            fileName: doc.fileName,
+            fileUrl: formatUrl(doc.fileUrl),
+            uploadedAt: doc.uploadedAt,
+          }));
+
+          const aadhaarImages = (docs.aadhaarImages || []).map((doc) => ({
+            fileName: doc.fileName,
+            fileUrl: formatUrl(doc.fileUrl),
+            uploadedAt: doc.uploadedAt,
+          }));
+
+          const profileImage = profile.profileImage
+            ? {
+              fileName: profile.profileImage.fileName,
+              fileUrl: formatUrl(profile.profileImage.fileUrl),
+              uploadedAt: profile.profileImage.uploadedAt,
+            }
+            : null;
+
+          // ❌ skip if no documents
+          if (
+            !profileImage &&
+            idImages.length === 0 &&
+            aadhaarImages.length === 0
+          ) {
+            return null;
+          }
+
+          return {
+            type: "employee",
+            name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+            email: user.email,
+            documents: {
+              profileImage,
+              idImages,
+              aadhaarImages,
+            },
+          };
+        })
+        .filter(Boolean);
+    }
+
+    // ================= CONTRACTS =================
+    if (!type || type === "contract") {
+      const contracts = await Contract.find(contractFilter)
+        .select(
+          "contractNumber invoiceNumber referenceNumber additionalDocuments"
+        )
+        .lean();
+
+      groupedContracts = contracts
+        .map((contract) => {
+          const documents = (contract.additionalDocuments || []).map(
+            (doc) => ({
+              fileName: doc.fileName,
+              fileUrl: formatUrl(doc.fileUrl),
+              uploadedAt: doc.uploadedAt,
+            })
+          );
+
+          // ❌ skip if no documents
+          if (documents.length === 0) return null;
+
+          return {
+            type: "contract",
+            contractNumber: contract.contractNumber,
+            invoiceNumber: contract.invoiceNumber,
+            referenceNumber: contract.referenceNumber,
+            documents,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    // ================= MERGE =================
+    let allData = [...groupedEmployees, ...groupedContracts];
+
+    // ================= OPTIONAL SORT (LATEST FIRST) =================
+    allData.sort((a, b) => {
+      const getLatestDate = (item) => {
+        if (item.type === "employee") {
+          const dates = [
+            item.documents.profileImage?.uploadedAt,
+            ...item.documents.idImages.map((d) => d.uploadedAt),
+            ...item.documents.aadhaarImages.map((d) => d.uploadedAt),
+          ].filter(Boolean);
+
+          return dates.length ? new Date(Math.max(...dates)) : new Date(0);
+        }
+
+        if (item.type === "contract") {
+          const dates = item.documents.map((d) => d.uploadedAt);
+          return dates.length ? new Date(Math.max(...dates)) : new Date(0);
+        }
+      };
+
+      return getLatestDate(b) - getLatestDate(a);
+    });
+
+    // ================= PAGINATION =================
+    const total = allData.length;
+    const startIndex = (pageNumber - 1) * limitNumber;
+
+    const paginatedData = allData.slice(
+      startIndex,
+      startIndex + limitNumber
+    );
+
+    return res.status(200).json({
+      success: true,
+      total,
+      page: pageNumber,
+      limit: limitNumber,
+      totalPages: Math.ceil(total / limitNumber),
+      data: paginatedData,
+    });
+  } catch (error) {
+    console.error("Get Documents Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch documents",
     });
   }
 };

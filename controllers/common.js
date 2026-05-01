@@ -163,6 +163,7 @@ exports.getAllWorkReports = async (req, res) => {
         .populate("contract", "contractNumber billingType")
         .populate("employees", "firstName lastName")
         .populate("reviewedBy", "firstName lastName")
+        .populate("company", "companyName")
         .populate("employeeBreakdown.employee", "firstName lastName")
         .sort({ createdAt: -1 })
         .skip(skip)

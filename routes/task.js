@@ -8,7 +8,6 @@ const { getAllTasksForCompanyAdmin, getTaskByIdForCompanyAdmin } = require("../c
 router.get(
   "/getAllTasks",
   authenticate,
-  authorize("view_tasks"),
   getAllTasksForCompanyAdmin
 );
 
